@@ -3,7 +3,7 @@
 usage() {
     cat << HELP
 
-  USAGE: $(basename $0) [-h|--help]
+  USAGE: $(basename "$0") [-h|--help]
 
   --help|-h         Show this message
 
@@ -17,8 +17,15 @@ die() {
     local code="$1"
     shift
     printf "%b\n" "$@"
+    show_clippy
+    exit "$code"
+}
+
+show_clippy() {
+    printf '\'
+    printf "%.0s_" $(seq 1 $width)
+    printf '/'
     cat /usr/share/clippy/clippy.png
-    exit $code
 }
 
 show_man() {
@@ -31,13 +38,18 @@ show_man() {
     export LESS_TERMCAP_ue=$'\E[0m'           # end underline
     export LESS_TERMCAP_us=$'\E[04;38;5;146m' # begin underline
 
-    trying=$(printf "$file" | awk '/\.TH/ {gsub(/"/,"",$2);gsub(/"/,"",$3);print $2"("$3")";exit;}')
+    trying=$(printf '%s' "$file" | \
+        awk '/\.TH/ {gsub(/"/,"",$2);gsub(/"/,"",$3);print $2"("$3")";exit;}')
 
-    cat <(printf "$file" | groff -man -Tascii) /usr/share/clippy/clippy.png | \
+    cat <(printf '%s' "$file" | \
+          groff -man -rLL="${width}n" -rLT="${width}n" -Tascii) \
+        <(show_clippy) | \
         less -FirSX --prompt="It looks like you're trying to $trying. "
 }
 
 main() {
+    width=$(( $(tput cols) - 3 ))
+
     if (( $# < 1 )) || [[ $1 == '--help' ]] || [[ $1 == '-h' ]]; then
         usage
         die 0
@@ -46,11 +58,11 @@ main() {
     local location=$(man --location "$@")
 
     if [[ ! -f "$location" ]]; then
-        die 1 "Man page not found for $@"
+        die 1 "Man page not found for" "$@"
     fi
 
     if file --mime-type "$location" | grep -q 'gzip$'; then
-        file=$(cat "$location" | gunzip)
+        file=$(gunzip < "$location")
     else
         file=$(cat "$location")
     fi
